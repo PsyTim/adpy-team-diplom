@@ -1,2 +1,5 @@
 .venv
 tokens.py
+__pycache__
+*.pem
+DB/access.py

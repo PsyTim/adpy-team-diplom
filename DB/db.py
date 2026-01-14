@@ -1,4 +1,8 @@
-from DB.access import Access
+try:
+    from DB.access import Access
+except:
+    from access import Access
+
 import psycopg2.extras
 
 

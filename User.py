@@ -1,5 +1,4 @@
 from DB.user import db_get_user, db_update_user
-from pprint import pprint
 
 
 class User:
@@ -19,9 +18,6 @@ class User:
         self._fieldlist = list(self._data)
         for key, value in self._data.items():
             self.__setattr__(key, value)
-        print(self._fieldset)
-        print(self._data)
-        # pprint(self.__dict__)
 
     def get_changes(self):
         changes = []
@@ -34,15 +30,23 @@ class User:
                         "old": self._data[key],
                     }
                 )
-                print(f"    {key}:", self._data[key], self.__getattribute__(key))
         return changes
 
     def save(self, update=True):
         changes = self.get_changes()
         if changes:
+            print(f"{changes=}")
             db_update_user(self.vk_id, changes)
             if update:
                 for c in changes:
                     self._data[c["key"]] = c["val"]
 
-        pass
+    def add_to_del(self, message_id):
+        if not self.to_del:
+            self.to_del = ""
+
+        self.to_del = (
+            ",".join((self.to_del.split(",") + [str(message_id)]))
+            if self.to_del
+            else str(message_id)
+        )

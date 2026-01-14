@@ -28,10 +28,19 @@ class TestRecreateTables(unittest.TestCase):
         user.save()
         self.assertTrue(True)
 
-    def test_recreate_and_fill_age(self, skip=True):
+    def test_recreate_and_fill_age(self, skip=True, add_fill={}):
+        # skip = False
+        self.skipTest("skip tables (re)creation") if skip else ...
+        add = add_fill.copy()
+        add |= {"birthday": "1977-03-16"}
+        print(add)
+        self.test_recreate_and_fill_autorization_code(skip=False, add_fill=add)
+        self.assertTrue(True)
+
+    def test_recreate_and_fill_city(self, skip=True):
         skip = False
         self.skipTest("skip tables (re)creation") if skip else ...
-        self.test_recreate_and_fill_autorization_code(
-            skip=False, add_fill={"birthday": "1977-03-16"}
+        self.test_recreate_and_fill_age(
+            skip=False, add_fill={"city_id": 1, "city": "Оренбург"}
         )
         self.assertTrue(True)

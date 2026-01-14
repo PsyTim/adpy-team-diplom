@@ -70,8 +70,11 @@ def vk_refresh(user, APP_ID):
         url, headers=headers, params=data, data=data
     )  # данные как form-data
     r_j = response.json()
+    from pprint import pprint
+
+    pprint(r_j)
     # print(r_j.get("error"))
-    if r_j.get("error") == "invalid_grant":
+    if r_j.get("error") in ("invalid_grant", "invalid_request"):
         return None, None
     user.access_token = r_j["access_token"]
     user.refresh_token = r_j["refresh_token"]

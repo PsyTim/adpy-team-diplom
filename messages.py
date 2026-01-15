@@ -43,6 +43,20 @@ def format_filters_msg(user, title="Условия подбора кандида
     )
 
 
+def extend_message(message, add, format_=[], type=None):
+    format = format_.copy()
+    res = message + add
+    if type:
+        format.append(
+            {
+                "type": type,
+                "offset": len(message),
+                "length": len(add),
+            }
+        )
+    return format, res
+
+
 def write_msg(user, message, keyboard=None, format=None, delete=False, attach=None):
     if isinstance(user, User):
         user_id = user.vk_id

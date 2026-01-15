@@ -1,4 +1,3 @@
-from random import randrange
 import json
 from pprint import pprint
 
@@ -17,35 +16,31 @@ from time import sleep
 from State import State
 
 from vk_auth import (
-    vk_auth_link,
     vk_refresh,
 )
 
 from User import User
 from DB.profiles import (
     db_add_profiles,
-    db_count_filter_profiles,
-    db_count_filter_profiles_blacklisted,
-    db_count_filter_profiles_viewed,
-    db_get_profile,
-    db_profile_set_viewed,
-    db_profile_clean_viewed,
-    db_profile_set_blacklisted,
-    db_profile_clean_bl,
     db_profile_del,
-    db_profile_to_fav,
     db_count_filter_fav,
     db_count_fav_total,
     db_get_fav,
 )
 
-from messages import del_all, del_msg, format_filters_msg, write_msg, declension
+from messages import (
+    del_all,
+    del_msg,
+    format_filters_msg,
+    write_msg,
+    declension,
+    extend_message,
+)
 from dlg_access import dlg_access, dlg_access_wait
 from dlg_show import dlg_show
+import dlg_filters
 
-# token = input('Token: ')
 vk = vk_api.VkApi(token=TOKEN)
-# longpoll = VkLongPoll(vk)
 longpoll = VkLongPoll(
     vk,
     wait=1,
@@ -57,48 +52,6 @@ user_vk = None
 vkuserapi = None
 
 
-def extend_message(message, add, format_=[], type=None):
-    format = format_.copy()
-    res = message + add
-    if type:
-        format.append(
-            {
-                "type": type,
-                "offset": len(message),
-                "length": len(add),
-            }
-        )
-    return format, res
-
-
-# def connect():
-#     conn = psycopg2.connect(database="vk_dating", user="postgres", password="postgres")
-#     return conn
-
-
-# def db_set_state(user, state):
-#     user["state"] = state
-#     sql = f"""UPDATE users SET state = {state} WHERE vk_id = {user["vk_id"]};"""
-#     print(sql)
-#     conn = connect()
-#     conn.autocommit = True
-#     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-#         cur.execute(sql)
-#         print(cur.rowcount)
-#         print(cur.rownumber)
-
-
-# def db_update_user(user):
-#     state = user["state"]
-#     to_del = user["to_del"]
-#     sql = f"""UPDATE users SET state = {state}, to_del = '{to_del}' WHERE vk_id = {user["vk_id"]};"""
-#     print(sql)
-#     conn = connect()
-#     conn.autocommit = True
-#     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-#         cur.execute(sql)
-#         print(cur.rowcount)
-#         print(cur.rownumber)
 class App:
     APP_ID = APP_ID
     AUTH_REDIRECT_URI = AUTH_REDIRECT_URI
@@ -126,17 +79,17 @@ while True:
                     payload = json.loads(event.extra_values.get("payload", "{}"))
                     command = payload.get("command")
                     action = payload.get("action")
-
                     uid = event.user_id
-                    request = event.text
-                    new_message = True
 
                     # Получаем из базы инфу о пользователе. Если нету, создаем запись, если есть, обновляем запись
                     user = User(uid)
                     user.App = App
                     user.action = action
-                    # user.new
-                    del action
+                    user.payload = payload
+                    user.request = event.text
+                    user.new_message = True
+                    del action, payload
+
                     if user.is_new:
                         user_data = user.App.vkapi.users.get(
                             user_ids=uid,
@@ -163,53 +116,83 @@ while True:
                         if not user.state:
                             # При первом запуске переходим в режим вывода анкет
                             user.state = State.SHOW
-                            # continue
                         elif (
                             not user.refresh_token
                             and user.state not in State.GETTING_ACCESS_TOKEN
                         ):
                             # требуется авторизация
                             user.state = State.NEED_ACCESS_TOKEN
-                            # user.save()
                         elif user.state == State.NEED_ACCESS_TOKEN:
                             # выводим запрос авторизации
                             dlg_access(user)
                             break
                         elif user.state == State.WAIT_ACCESS_TOKEN:
                             dlg_access_wait(user)
-                            # continue
+
+                        # если не указан фильтр минимального возраста
                         elif (
                             not user.filter_age_from
                             and user.state not in State.SET_MIN_AGE
                         ):
+
                             if user.age:
+                                # берем его по возрасту пользователя
                                 user.filter_age_from = int(user.age)
-                                user.save()
-                            elif user.state not in State.SET_MIN_AGE:
+
+                            else:
+                                # при отсутствии возраста пользователя, переходим в режим запроса
                                 user.state = State.MIN_AGE_NEED
                                 del_all(user)
-                                user.save()
-                                command = None
-                                payload = {}
+
+                        # Режим ввода минимального возраста
+                        elif user.state == State.MIN_AGE_NEED:
+                            dlg_filters.min_age_need(user)
+                            break
+
+                        # Проверяем введенный минимальный возраст
+                        elif user.state == State.MIN_AGE_INPUT:
+                            dlg_filters.min_age_input(user)
+
+                        # если не указан фильтр максимального возраста
                         elif not user.filter_age_to and user.state not in State.SET_AGE:
+
+                            # берем его по возрасту пользователя
                             if user.age:
                                 user.filter_age_to = int(user.age)
-                                user.save()
+
+                            # при отсутствии возраста пользователя, переходим в режим запроса
                             elif user.state not in State.SET_MAX_AGE:
-                                del_all(user)
                                 user.state = State.MAX_AGE_NEED
-                                user.save()
-                                command = None
-                                payload = {}
+                                del_all(user)
+
+                        # Режим ввода максимального возраста
+                        elif user.state == State.MAX_AGE_NEED:
+                            dlg_filters.max_age_need(user)
+                            break
+
+                        elif user.state == State.MAX_AGE_INPUT:
+                            # Проверяем введенный максимальный возраст
+                            dlg_filters.max_age_input(user)
+
+                        # если не указан половой фильтр
                         elif (
                             user.filter_gender is None
                             and user.state not in State.SET_AGE | State.SET_GENDER
                         ):
+                            # переходим в режим запроса
                             user.state = State.GENDER_NEED
-                            user.save()
-                            print("after_save")
-                            command = None
-                            payload = {}
+
+                        # режим выбора пола
+                        elif user.state == State.GENDER_NEED:
+                            dlg_filters.gender_need(user)
+                            break
+
+                        elif user.state == State.CHANGE_GENDER:
+
+                            # проверяем и применяем выбранный
+                            dlg_filters.change_gender(user)
+
+                        # если не указан фильтр по городу
                         elif (
                             user.filter_city_id is None
                             and user.state
@@ -217,9 +200,7 @@ while True:
                         ):
                             user.state = State.CITY_NEED
                             del_all(user)
-                            user.save()
-                            command = None
-                            payload = {}
+
                         elif user.state == State.FIND:
                             del_all(user)
                             kb = VkKeyboard(inline=True)
@@ -579,221 +560,6 @@ while True:
                             )
                             user.state = State.INPUT_CITY
                             break
-                        elif user.state == State.MIN_AGE_NEED:
-                            print("MIN_AGE_NEED")
-                            kb = VkKeyboard(inline=True)
-                            if user.filter_age_from:
-                                msg_format = []
-                                msg = (
-                                    format_filters_msg(user)
-                                    + "\n\nИзменяем минимальный возраст:"
-                                )
-                                kb.add_button(
-                                    "Отмена",
-                                    color=VkKeyboardColor.NEGATIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                                send_kb = kb.get_keyboard()
-                            else:
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Для начала нужно указать диапазон возраста кандидатов\n",
-                                    type="bold",
-                                )
-
-                                send_kb = kb.get_empty_keyboard()
-                            write_msg(
-                                user,
-                                msg,
-                                format=msg_format,
-                                delete=True,
-                                keyboard=send_kb,
-                            )
-                            write_msg(
-                                user,
-                                f"Введите минимальный возраст (16-{min(99, user.filter_age_to if user.filter_age_to else 100)}):",
-                                delete=True,
-                            )
-                            user.state = State.MIN_AGE_INPUT
-                            user.save()
-                            break
-
-                        elif user.state == State.MIN_AGE_INPUT:
-                            # Проверяем введенный минимальный возраст
-                            del_msg(user.to_del, user.App.vk)
-                            user.to_del = ""
-                            if not request.isdigit():
-                                s = "Вы должны ввести целое число!"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                # )
-                                user.state = State.MIN_AGE_NEED
-                            elif int(request) < 16:
-                                s = "Минимальный возраст не может быть меньше 16 лет"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                # )
-                                user.state = State.MIN_AGE_NEED
-                            elif int(request) > min(
-                                99, user.filter_age_to if user.filter_age_to else 100
-                            ):
-                                s = f"Минимальный возраст не может быть больше {min(99, user.filter_age_to if user.filter_age_to else 100)} лет"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                # )
-                                user.state = State.MIN_AGE_NEED
-                            else:
-                                user.filter_age_from = int(request)
-                                user.state = State.CHANGE_FILTERS
-                            user.save()
-                            continue
-
-                        elif user.state == State.MAX_AGE_NEED:
-                            kb = VkKeyboard(inline=True)
-                            if user.filter_age_to:
-                                msg_format = []
-                                msg = (
-                                    format_filters_msg(user)
-                                    + "\n\nИзменяем максимальный возраст:"
-                                )
-                                kb.add_button(
-                                    "Отмена",
-                                    color=VkKeyboardColor.NEGATIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                                send_kb = kb.get_keyboard()
-                            else:
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Для начала нужно указать диапазон возраста кандидатов\n",
-                                    type="bold",
-                                )
-                                msg += "Вы уже задали минимальный возраст: "
-                                msg_format, msg = extend_message(
-                                    msg,
-                                    str(user.filter_age_from),
-                                    msg_format,
-                                    type="bold",
-                                )
-                                msg_format, msg = extend_message(
-                                    msg,
-                                    "\nПозже вы сможете изменить его и остальные фильтры в любой момент...",
-                                    msg_format,
-                                    type="italic",
-                                )
-
-                                send_kb = kb.get_empty_keyboard()
-                            write_msg(
-                                user,
-                                msg,
-                                format=msg_format,
-                                delete=True,
-                                keyboard=send_kb,
-                            )
-                            write_msg(
-                                user,
-                                f"{'В' if user.filter_age_to else 'Теперь в' }ведите максимальный возраст ({max(user.filter_age_from ,16)} - 99):",
-                                delete=True,
-                            )
-                            user.state = State.MAX_AGE_INPUT
-                            break
-
-                        elif user.state == State.MAX_AGE_INPUT:
-                            # Проверяем введенный минимальный возраст
-                            del_all(user)
-                            if not request.isdigit():
-                                s = "Вы должны ввести целое число!"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                # )
-                                user.state = State.MAX_AGE_NEED
-                            elif int(request) < max(
-                                16, user.filter_age_from if user.filter_age_from else 0
-                            ):
-                                s = f"Максимальный возраст не может быть меньше минимального! ({max(16, user.filter_age_from if user.filter_age_from else 0)} лет)"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                user.state = State.MAX_AGE_NEED
-                            elif int(request) > 99:
-                                s = "Максимальный возраст не может быть больше 99 лет"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                # )
-                                user.state = State.MAX_AGE_NEED
-                            else:
-                                user.filter_age_to = int(request)
-                                user.state = State.CHANGE_FILTERS
-                            user.save()
-                            continue
-
                         elif user.state == State.INPUT_CITY:
                             # Проверяем введенный город
                             del_all(user)
@@ -817,8 +583,8 @@ while True:
                                 #         "delete": True,
                                 #     },
                                 # )
-                            if len(request) > 15:
-                                request = request[0:15]
+                            if len(user.request) > 15:
+                                user.request = user.request[0:15]
                                 # write_msg(
                                 #     user, "много городов, вот некоторые", delete=True
                                 # )
@@ -831,11 +597,11 @@ while True:
                                 user.save()
                                 continue
                             cities = user.App.vkuserapi.database.getCities(
-                                q=request, count=4, need_all=1
+                                q=user.request, count=4, need_all=1
                             )
                             if cities["count"] > 4:
                                 cities = user.App.vkuserapi.database.getCities(
-                                    q=request, count=4, need_all=0
+                                    q=user.request, count=4, need_all=0
                                 )
                             if cities["count"]:
                                 msg += f"\nВот что мы нашли по вашему запросу:\n"
@@ -907,8 +673,8 @@ while True:
                             # Проверяем нажата ли кнопка выбора пола
                             user.save()
                             old = user.filter_city_id
-                            set_city_id = payload.get("city_id", None)
-                            set_city_title = payload.get("city_title", None)
+                            set_city_id = user.payload.get("city_id", None)
+                            set_city_title = user.payload.get("city_title", None)
                             print("city_payload", set_city_id, set_city_title)
                             user.filter_city_id = set_city_id
                             user.filter_city = set_city_title
@@ -919,103 +685,6 @@ while True:
                             user.save()
                             continue
 
-                        elif user.state == State.GENDER_NEED:
-                            print("State.GENDER_NEED")
-                            kb = VkKeyboard(inline=True)
-                            kb.add_button(
-                                "Мужской",
-                                color=VkKeyboardColor.SECONDARY,
-                                payload={
-                                    "command": "set_state",
-                                    "state": State.CHANGE_GENDER,
-                                    "gender": "2",
-                                    "delete": True,
-                                },
-                            )
-                            kb.add_button(
-                                "Женский",
-                                color=VkKeyboardColor.SECONDARY,
-                                payload={
-                                    "command": "set_state",
-                                    "state": State.CHANGE_GENDER,
-                                    "gender": "1",
-                                    "delete": True,
-                                },
-                            )
-                            kb.add_button(
-                                "Любой",
-                                color=VkKeyboardColor.SECONDARY,
-                                payload={
-                                    "command": "set_state",
-                                    "state": State.CHANGE_GENDER,
-                                    "gender": "0",
-                                    "delete": True,
-                                },
-                            )
-                            if user.filter_gender:
-                                msg_format = []
-                                msg = (
-                                    format_filters_msg(user)
-                                    + "\n\nИзменяем пол кандидатов:"
-                                )
-                                kb.add_line()
-                                kb.add_button(
-                                    "Отмена",
-                                    color=VkKeyboardColor.NEGATIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                            else:
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Теперь нужно указать пол кандидатов\n",
-                                    type="bold",
-                                )
-                            send_kb = kb.get_keyboard()
-                            write_msg(
-                                user,
-                                msg,
-                                format=msg_format,
-                                delete=True,
-                                keyboard=send_kb,
-                            )
-                            user.state = State.CHANGE_GENDER
-                            break
-
-                        elif user.state == State.CHANGE_GENDER:
-                            del_all(user)
-                            # Проверяем нажата ли кнопка выбора пола
-                            set_gender = payload.get("gender", None)
-                            print("gender_payload", payload)
-                            if set_gender is None:
-                                s = "Выберите пол нажав на кнопку!"
-                                write_msg(
-                                    user,
-                                    s,
-                                    format=[
-                                        {
-                                            "type": "bold",
-                                            "offset": 0,
-                                            "length": len(s),
-                                        }
-                                    ],
-                                    delete=True,
-                                )
-                                user.state = State.GENDER_NEED
-                            else:
-                                old_gender = user.filter_gender
-                                user.filter_gender = set_gender
-                                if old_gender is None:
-                                    user.state = State.SHOW
-                                else:
-                                    user.state = State.CHANGE_FILTERS
-                            user.save()
-                            continue
-
-                        user.save()
                     user.save()
                     # Создание клавиатуры
                     keyboard = VkKeyboard(one_time=False)

@@ -29,7 +29,7 @@ class TestRecreateTables(unittest.TestCase):
         self.assertTrue(True)
 
     def test_recreate_and_fill_age(self, skip=True, add_fill={}):
-        # skip = False
+        skip = False
         self.skipTest("skip tables (re)creation") if skip else ...
         add = add_fill.copy()
         add |= {"birthday": "1977-03-16"}

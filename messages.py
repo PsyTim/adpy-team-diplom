@@ -26,21 +26,16 @@ def del_msg(message_id, vk):  # user_id,
             pass
 
 
-def format_filters_msg(user, title="Условия подбора кандидатов:\n"):
-    no_value = "Не задан"
-    genders = ["Любой", "Женский", "Мужской"]
+def format_filters_msg(user, title="Условия подбора:"):
+    no_value = "-"
+    genders = ["М/Ж", "Ж", "М"]
     min_age = user.filter_age_from if user.filter_age_from else no_value
     max_age = user.filter_age_to if user.filter_age_to else no_value
     gender = (
         genders[int(user.filter_gender)] if not user.filter_gender is None else no_value
     )
     city = user.filter_city if not user.filter_city is None else no_value
-    return (
-        title + f"\n        Минимальный возраст: {min_age}"
-        f"\n        Максимальный возраст: {max_age}"
-        f"\n\n        Пол: {gender}"
-        f"\n\n        Город: {city}"
-    )
+    return title + f"{min_age}- {max_age} {gender} {city}"
 
 
 def extend_message(message, add, format_=[], type=None):

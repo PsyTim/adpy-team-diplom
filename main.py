@@ -24,8 +24,6 @@ from DB.profiles import (
     db_add_profiles,
     db_profile_del,
     db_count_filter_fav,
-    db_count_fav_total,
-    db_get_fav,
 )
 
 from messages import (
@@ -38,7 +36,7 @@ from messages import (
 )
 from dlg_access import dlg_access, dlg_access_wait
 from dlg_show import dlg_show
-import dlg_filters
+import dlg_filters, dlg_fav
 
 vk = vk_api.VkApi(token=TOKEN)
 longpoll = VkLongPoll(
@@ -70,8 +68,10 @@ while True:
         try:
             events = longpoll.check()
         except Exception as e:
+            print(e)
             continue
-
+        if not len(events):
+            sleep(1)
         for event in events:
             if event.type == VkEventType.MESSAGE_NEW:
                 if event.to_me:
@@ -126,6 +126,7 @@ while True:
                             # выводим запрос авторизации
                             dlg_access(user)
                             break
+
                         elif user.state == State.WAIT_ACCESS_TOKEN:
                             dlg_access_wait(user)
 
@@ -187,12 +188,12 @@ while True:
                             dlg_filters.gender_need(user)
                             break
 
+                        # проверяем и запоминаем применяем выбранный пол
                         elif user.state == State.CHANGE_GENDER:
-
-                            # проверяем и применяем выбранный
                             dlg_filters.change_gender(user)
 
-                        # если не указан фильтр по городу
+                        # если не задан фильтр по городу
+                        # переходим к диалогу выбора города
                         elif (
                             user.filter_city_id is None
                             and user.state
@@ -200,6 +201,26 @@ while True:
                         ):
                             user.state = State.CITY_NEED
                             del_all(user)
+
+                        # начало диалога выбора города
+                        elif user.state == State.CITY_NEED:
+                            dlg_filters.city_need(user)
+                            break
+
+                        # проверяем введенный город,
+                        # запрашиваем в ВК и предлагаем варианты
+                        elif user.state == State.INPUT_CITY:
+                            if dlg_filters.input_city(user):
+                                break
+
+                        # проверяем нажата ли кнопка выбора города
+                        # и запоминаем
+                        elif user.state == State.CHANGE_CITY:
+                            dlg_filters.change_city(user)
+
+                        elif user.state == State.CHANGE_FILTERS:
+                            dlg_filters.change(user)
+                            break
 
                         elif user.state == State.FIND:
                             del_all(user)
@@ -225,135 +246,8 @@ while True:
                             user.save()
                             break
                         elif user.state == State.SHOW_FAV:
-                            del_all(user)
-                            user.save()
-                            fav_cnt = db_count_filter_fav(user)["count"]
-                            fav_cnt_total = db_count_fav_total(user)["count"]
-                            if fav_cnt:
-                                res = db_get_fav(user)
-                                write_msg(user, str(res))
-                                pprint(res)
-                                print(type(res["birthday"]))
-                                user.App.user_vk, user.App.vkuserapi = vk_refresh(
-                                    user, user.App.APP_ID
-                                )
-                                if not user.App.user_vk:
-                                    user.state = State.NEED_ACCESS_TOKEN
-                                    user.save()
-                                    continue
-                                profile = user.App.vkuserapi.users.get(
-                                    user_ids=res["vk_id"]
-                                )[0]
-                                pprint(profile)
-                                write_msg(user, str(profile))
-                                photos = []
-                                try:
-                                    photos = user.App.vkuserapi.photos.get(
-                                        owner_id=res["vk_id"],
-                                        album_id="profile",
-                                        count=1000,
-                                        extended=1,
-                                        rev=1,
-                                    )
-                                except Exception as e:
-                                    if type(e) == vk_api.exceptions.ApiError:
-                                        ee: vk_api.exceptions.ApiError = e
-                                        # ee.code
-                                        print(
-                                            type(e) == ApiError,
-                                            e,
-                                            ee.code,
-                                            ee.error["error_msg"],
-                                        )
-                                        if (
-                                            ee.code == 30
-                                            and ee.error["error_msg"]
-                                            == "This profile is private"
-                                        ):
-                                            print("delete")
-                                            db_profile_del(user, res["id"])
-                                            user.state = State.SHOW
-                                            user.save()
-                                            continue
-                                    print(type(e), e)
-                                # print(photos)
-                                phs = []
-                                for p in photos["items"]:
-                                    phs.append(
-                                        {
-                                            "likes": p["likes"]["count"],
-                                            "str": f"photo{p['owner_id']}_{p['id']}",
-                                        }
-                                    )
-                                # pprint(phs)
-                                phs = sorted(
-                                    phs, key=lambda x: x["likes"], reverse=True
-                                )[0 : min(3, len(phs))]
-                                pprint(phs)
-                                phsl = list(map(lambda x: x.get("str"), phs))
-                                if not phsl:
-                                    phsl = ["photo-233543845_457239066"]
-                                pprint(phsl)
-                                write_msg(user, str(phsl))
-                                if res:
-                                    kb = VkKeyboard(inline=True)
-                                    kb.add_button(
-                                        "Дальше",
-                                        color=VkKeyboardColor.PRIMARY,
-                                        payload={
-                                            "command": "set_state",
-                                            "state": State.SHOW_FAV,
-                                            "action": State.ACT_NEXT,
-                                            "delete": True,
-                                        },
-                                    )
-                                    kb.add_button(
-                                        "➕❤️",
-                                        color=VkKeyboardColor.POSITIVE,
-                                        payload={
-                                            "command": "set_state",
-                                            "state": State.SHOW,
-                                            "action": State.ACT_TO_FAV,
-                                            "delete": True,
-                                        },
-                                    )
-                                    kb.add_button(
-                                        "➡️🗑",
-                                        color=VkKeyboardColor.NEGATIVE,
-                                        payload={
-                                            "command": "set_state",
-                                            "state": State.SHOW,
-                                            "to_blacklist": True,
-                                            "delete": True,
-                                        },
-                                    )
-                                    send_kb = kb.get_keyboard()
-
-                                    pprint(locals())
-                                    if "msg_format" in locals():
-                                        print("in_locals")
-                                        del msg_format
-                                    msg_format, msg = extend_message(
-                                        "",
-                                        "Вы просматриваете любимые анкеты\n",
-                                        type="bold",
-                                    )
-                                    pprint(msg_format)
-                                    pprint(msg)
-
-                                    msg = f"{msg}\n\n[https://vk.com/{res['domain']}|{profile['first_name']} {profile['last_name']}]\n{res['city']}, {int(res['age'])} {declension(int(res['age']), 'год', 'года', 'лет')}"
-
-                                    write_msg(
-                                        user,
-                                        msg,
-                                        format=msg_format,
-                                        delete=True,
-                                        keyboard=send_kb,
-                                        attach=",".join(phsl),
-                                    )
-                                    user.save()
-
-                            break
+                            if dlg_fav.show(user):
+                                break
                         elif user.state == State.SHOW:
                             res = dlg_show(user)
                             if res == 1:
@@ -411,7 +305,7 @@ while True:
                                     color=VkKeyboardColor.PRIMARY,
                                     payload={
                                         "command": "set_state",
-                                        "state": State.SHOW_FILTERS,
+                                        "state": State.CHANGE_FILTERS,
                                         "delete": True,
                                     },
                                 )
@@ -430,6 +324,7 @@ while True:
                                 )
                                 break
                             db_add_profiles(
+                                user,
                                 to_insert,
                                 {"domain", "birthday", "gender", "city_id", "city"},
                             )
@@ -437,253 +332,6 @@ while True:
                             user.state = State.SHOW
                             del_all(user)
                             user.save()
-                            continue
-                        elif (
-                            user.state == State.SHOW_FILTERS
-                            or user.state == State.CHANGE_FILTERS
-                        ):
-                            msg = format_filters_msg(user)
-                            # Клавиатура для просмотра анкет
-                            kb = VkKeyboard(inline=True)
-                            if user.state == State.CHANGE_FILTERS:
-                                msg += "\n\nЧто изменить"
-                                kb.add_button(
-                                    "Мин. возраст",
-                                    color=VkKeyboardColor.SECONDARY,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.MIN_AGE_NEED,
-                                        "delete": True,
-                                    },
-                                )
-                                kb.add_button(
-                                    "Макс. возраст",
-                                    color=VkKeyboardColor.SECONDARY,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.MAX_AGE_NEED,
-                                        "delete": True,
-                                    },
-                                )
-                                kb.add_line()
-                                kb.add_button(
-                                    "Пол",
-                                    color=VkKeyboardColor.SECONDARY,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.GENDER_NEED,
-                                        "delete": True,
-                                    },
-                                )
-                                kb.add_button(
-                                    "Город",
-                                    color=VkKeyboardColor.SECONDARY,
-                                    payload=f'{{"command": "set_state", "state": {State.CITY_NEED}}}',
-                                )
-                                kb.add_line()
-                                kb.add_button(
-                                    "Всё хорошо, продолжить",
-                                    color=VkKeyboardColor.POSITIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.SHOW,
-                                        "delete": True,
-                                    },
-                                )
-                            else:
-                                kb.add_button(
-                                    "Всё хорошо, продолжить",
-                                    color=VkKeyboardColor.POSITIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.SHOW,
-                                        "delete": True,
-                                    },
-                                )
-                                kb.add_button(
-                                    "Изменить",
-                                    color=VkKeyboardColor.POSITIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                                # kb.add_button(
-                                #    "Смотреть анкеты", color=VkKeyboardColor.PRIMARY
-                                # )
-                            print("До:", user.to_del)
-                            write_msg(
-                                user,
-                                msg,
-                                keyboard=kb.get_keyboard(),
-                                delete=True,
-                            )
-                            print("После:", user.to_del)
-                            user.save()
-                            break
-                        elif user.state == State.FILTERS_FINISH:
-                            del_msg(user["to_del"])
-                        elif user.state == State.CITY_NEED:
-                            kb = VkKeyboard(inline=True)
-                            if not user.filter_city_id:
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Теперь нужно указать город для поиска кандидатов",
-                                    type="bold",
-                                )
-                                send_kb = kb.get_empty_keyboard()
-                            else:
-                                msg_format = []
-                                msg = format_filters_msg(user) + "\n\nИзменяем город:"
-                                kb.add_button(
-                                    "Отмена",
-                                    color=VkKeyboardColor.NEGATIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                                send_kb = kb.get_keyboard()
-                            write_msg(
-                                user,
-                                msg,
-                                format=msg_format,
-                                delete=True,
-                                keyboard=send_kb,
-                            )
-                            write_msg(
-                                user,
-                                f"Введите название города или его часть:",
-                                delete=True,
-                            )
-                            user.state = State.INPUT_CITY
-                            break
-                        elif user.state == State.INPUT_CITY:
-                            # Проверяем введенный город
-                            del_all(user)
-                            kb = VkKeyboard(inline=True)
-                            msg_format = []
-                            if not user.filter_city_id:
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Теперь нужно указать город для поиска кандидатов",
-                                    type="bold",
-                                )
-                            else:
-                                msg = format_filters_msg(user) + "\n\nВыберите город:"
-                                # msg = format_filters_msg(user) + "\n\nИзменяем город:"
-                                # kb.add_button(
-                                #     "Отмена",
-                                #     color=VkKeyboardColor.NEGATIVE,
-                                #     payload={
-                                #         "command": "set_state",
-                                #         "state": State.CHANGE_FILTERS,
-                                #         "delete": True,
-                                #     },
-                                # )
-                            if len(user.request) > 15:
-                                user.request = user.request[0:15]
-                                # write_msg(
-                                #     user, "много городов, вот некоторые", delete=True
-                                # )
-                            user.App.user_vk, user.App.vkuserapi = vk_refresh(
-                                user, user.App.APP_ID
-                            )
-                            if not user.App.user_vk:
-                                user.refresh_token = ""
-                                user.state = State.NEED_ACCESS_TOKEN
-                                user.save()
-                                continue
-                            cities = user.App.vkuserapi.database.getCities(
-                                q=user.request, count=4, need_all=1
-                            )
-                            if cities["count"] > 4:
-                                cities = user.App.vkuserapi.database.getCities(
-                                    q=user.request, count=4, need_all=0
-                                )
-                            if cities["count"]:
-                                msg += f"\nВот что мы нашли по вашему запросу:\n"
-                                for _, city in enumerate(cities["items"]):
-                                    msg += f"{_+1}. {city['title']}"
-                                    if city.get("area"):
-                                        msg += f", {city['area']}"
-                                    if city.get("region"):
-                                        msg += f", {city['region']}"
-                                    msg += "\n"
-                                    if _ == 2:
-                                        kb.add_line()
-                                    kb.add_button(
-                                        f"    {_+1}. {city['title']}"[0:40],
-                                        color=VkKeyboardColor.SECONDARY,
-                                        payload={
-                                            "command": "set_state",
-                                            "state": State.CHANGE_CITY,
-                                            "city_id": city["id"],
-                                            "city_title": city["title"],
-                                            "delete": True,
-                                        },
-                                    )
-                                msg += "\nВыберите нажав кнопку, либо уточните название, поаторив ввод (название или его часть)"
-                            else:
-                                del_all(user)
-                                msg_format, msg = extend_message(
-                                    "",
-                                    "Мы ничего не нашли по вашему запросу, попробуйте ввести уточненное название",
-                                    type="bold",
-                                )
-                                write_msg(
-                                    user,
-                                    msg,
-                                    format=msg_format,
-                                    delete=True,
-                                )
-                                user.state = State.CITY_NEED
-                                continue
-                            if user.filter_city:
-                                if cities["count"] > 0:
-                                    kb.add_line()
-                                kb.add_button(
-                                    "Отмена",
-                                    color=VkKeyboardColor.NEGATIVE,
-                                    payload={
-                                        "command": "set_state",
-                                        "state": State.CHANGE_FILTERS,
-                                        "delete": True,
-                                    },
-                                )
-                            send_kb = kb.get_keyboard()
-                            if not kb.lines[0]:
-                                print("empte")
-                                send_kb = kb.get_empty_keyboard()
-                            print(kb.lines)
-
-                            write_msg(
-                                user,
-                                msg,
-                                format=msg_format,
-                                delete=True,
-                                keyboard=send_kb,
-                            )
-                            user.state = State.INPUT_CITY
-                            break
-                        elif user.state == State.CHANGE_CITY:
-                            del_all(user)
-                            # Проверяем нажата ли кнопка выбора пола
-                            user.save()
-                            old = user.filter_city_id
-                            set_city_id = user.payload.get("city_id", None)
-                            set_city_title = user.payload.get("city_title", None)
-                            print("city_payload", set_city_id, set_city_title)
-                            user.filter_city_id = set_city_id
-                            user.filter_city = set_city_title
-                            if old is None:
-                                user.state = State.SHOW
-                            else:
-                                user.state = State.CHANGE_FILTERS
-                            user.save()
-                            continue
 
                     user.save()
                     # Создание клавиатуры
@@ -715,7 +363,7 @@ while True:
                                 color=VkKeyboardColor.PRIMARY,
                                 payload={
                                     "command": "set_state",
-                                    "state": State.SHOW_FILTERS,
+                                    "state": State.CHANGE_FILTERS,
                                     "delete": True,
                                 },
                             )
@@ -754,4 +402,6 @@ while True:
     except requests_exceptions_ReadTimeout:
         print("\n Переподключение к серверам ВК \n")
         sleep(3)
-    sleep(1)
+        # except Exception as e:
+        #     print(e)
+        sleep(1)

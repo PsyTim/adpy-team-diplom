@@ -3,8 +3,13 @@ from pkce import generate_code_verifier
 
 from DB.db import connect
 
+# db_add_profiles(
+#     to_insert,
+#     {"domain", "birthday", "gender", "city_id", "city"},
+# )
 
-def db_add_profiles(profiles, update=[]):
+
+def db_add_profiles(user, profiles, update=[]):
     fields = list(profiles[0].keys())
     vals_str = ""
     for profile in profiles:
@@ -19,14 +24,32 @@ def db_add_profiles(profiles, update=[]):
         conflict_str = "\nON CONFLICT (vk_id) DO UPDATE SET\n"
         for field in update:
             conflict_str += f"{field} = EXCLUDED.{field}, \n"
-    sql += conflict_str[:-3] + ";"
+    sql += conflict_str[:-3] + "\nRETURNING id;;"
     print(sql)
     conn = connect()
-    conn.autocommit = True
+    conn.autocommit = False
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
         print(cur.rowcount)
         print(cur.rownumber)
+        res = cur.fetchall()
+        print(res)
+        sql = f"""INSERT INTO users_profiles (user_id, profile_id) 
+        VALUES"""
+
+        # ({user.id}, {profile_id}, NOW())
+        for r in res:
+            sql += f"""({user.id}, {r["id"]}),\n"""
+        sql = sql[:-2]
+        sql += f"""\nON CONFLICT (user_id, profile_id) DO NOTHING"""
+        print(sql)
+        # with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(sql)
+        print(cur.rowcount)
+        print(cur.rownumber)
+        # res = cur.fetchall()
+        # print(res)
+        conn.commit()
 
 
 def db_profile_to_fav(user, profile_id):
@@ -162,7 +185,7 @@ def db_count_filter_fav(user):
     return res
 
 
-def db_count_fav_total(user):
+def count_fav_total(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         WHERE {format_filter_where_id(user)} and users_profiles.blacklisted IS null and users_profiles.favorit IS NOT null;"""
@@ -196,7 +219,7 @@ def db_get_profile(user):
     return res
 
 
-def db_get_fav(user):
+def get_fav(user):
     sql = f"""SELECT profiles.*, DATE_PART('YEAR',AGE(birthday)) as age, users_profiles.favorit FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         where {format_filter_where(user)} and users_profiles.blacklisted IS NULL and users_profiles.favorit IS NOT NULL ORDER BY users_profiles.favorit LIMIT 1;"""

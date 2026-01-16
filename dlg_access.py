@@ -19,7 +19,7 @@ from State import State
 from vk_auth import vk_auth_link, vk_refresh
 
 
-def dlg_access(user):
+def get(user):
     del_all(user)
     kb = VkKeyboard(inline=True)
     kb.add_openlink_button(
@@ -46,7 +46,7 @@ def dlg_access(user):
     return 1
 
 
-def dlg_access_wait(user):
+def wait(user):
     if not user.refresh_token:
         user.state = State.NEED_ACCESS_TOKEN
     else:

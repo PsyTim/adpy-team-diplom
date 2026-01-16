@@ -25,15 +25,15 @@ def db_add_profiles(user, profiles, update=[]):
         for field in update:
             conflict_str += f"{field} = EXCLUDED.{field}, \n"
     sql += conflict_str[:-3] + "\nRETURNING id;;"
-    print(sql)
+    # print(sql)
     conn = connect()
     conn.autocommit = False
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
         res = cur.fetchall()
-        print(res)
+        # print(res)
         sql = f"""INSERT INTO users_profiles (user_id, profile_id) 
         VALUES"""
 
@@ -42,11 +42,11 @@ def db_add_profiles(user, profiles, update=[]):
             sql += f"""({user.id}, {r["id"]}),\n"""
         sql = sql[:-2]
         sql += f"""\nON CONFLICT (user_id, profile_id) DO NOTHING"""
-        print(sql)
+        # print(sql)
         # with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
         # res = cur.fetchall()
         # print(res)
         conn.commit()
@@ -61,8 +61,8 @@ def db_profile_to_fav(user, profile_id):
     conn.autocommit = True
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
 
 
 def db_profile_set_blacklisted(user, profile_id):
@@ -74,8 +74,8 @@ def db_profile_set_blacklisted(user, profile_id):
     conn.autocommit = True
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
 
 
 def db_profile_set_viewed(user, profile_id):
@@ -87,8 +87,8 @@ def db_profile_set_viewed(user, profile_id):
     conn.autocommit = True
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
 
 
 def db_profile_clean_bl(user):
@@ -104,8 +104,8 @@ def db_profile_clean_bl(user):
     conn.autocommit = True
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
 
 
 def db_profile_clean_viewed(user):
@@ -121,8 +121,8 @@ def db_profile_clean_viewed(user):
     conn.autocommit = True
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
 
 
 def db_profile_del(user, id):
@@ -131,12 +131,12 @@ def db_profile_del(user, id):
     conn.autocommit = False
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
         sql = f"""DELETE FROM profiles WHERE id={id};"""
         cur.execute(sql)
-        print(cur.rowcount)
-        print(cur.rownumber)
+        # print(cur.rowcount)
+        # print(cur.rownumber)
         conn.commit()
 
 
@@ -155,16 +155,16 @@ def db_count_filter_profiles(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         WHERE {format_filter_where(user)} and users_profiles.blacklisted IS null and users_profiles.viewed IS null;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -172,16 +172,16 @@ def db_count_filter_fav(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         WHERE {format_filter_where(user)} and users_profiles.blacklisted IS null and users_profiles.favorit IS NOT null;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -189,16 +189,16 @@ def count_fav_total(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         WHERE {format_filter_where_id(user)} and users_profiles.blacklisted IS null and users_profiles.favorit IS NOT null;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -206,16 +206,16 @@ def db_get_profile(user):
     sql = f"""SELECT profiles.*, DATE_PART('YEAR',AGE(birthday)) as age FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         where {format_filter_where(user)} and users_profiles.blacklisted IS NULL and users_profiles.viewed IS NULL ORDER BY profiles.id LIMIT 1;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -223,16 +223,16 @@ def get_fav(user):
     sql = f"""SELECT profiles.*, DATE_PART('YEAR',AGE(birthday)) as age, users_profiles.favorit FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         where {format_filter_where(user)} and users_profiles.blacklisted IS NULL and users_profiles.favorit IS NOT NULL ORDER BY users_profiles.favorit LIMIT 1;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -240,16 +240,16 @@ def db_count_filter_profiles_blacklisted(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         where {format_filter_where(user)} AND users_profiles.blacklisted IS NOT NULL;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res
 
 
@@ -257,14 +257,14 @@ def db_count_filter_profiles_viewed(user):
     sql = f"""SELECT COUNT(*) FROM profiles
         LEFT JOIN users_profiles on profiles.id = users_profiles.profile_id AND users_profiles.user_id = {user.id}
         where {format_filter_where(user)} AND users_profiles.viewed IS NOT NULL;"""
-    print(sql)
+    # print(sql)
     conn = connect()
     res = None
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        print(cur.rowcount)
+        # print(cur.rowcount)
         if cur.rowcount:
             res = cur.fetchone()
             res = dict(res)
-    print(res)
+    # print(res)
     return res

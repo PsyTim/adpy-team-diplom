@@ -1,8 +1,9 @@
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.exceptions import ApiError as VkApiError
 
-from messages import del_all, format_filters_msg, write_msg, declension
+from messages import del_all, format_filters_msg, write_msg, declension, extend_message
 from DB.profiles import (
+    db_add_profiles,
     db_count_filter_profiles,
     db_profile_clean_viewed,
     db_count_filter_profiles_viewed,
@@ -17,6 +18,107 @@ from DB.profiles import (
 )
 from State import State
 from vk_auth import vk_refresh
+
+
+def find(user):
+    del_all(user)
+    kb = VkKeyboard(inline=True)
+    kb.add_button(
+        "Начать поиск",
+        color=VkKeyboardColor.PRIMARY,
+        payload={
+            "command": "set_state",
+            "state": State.FINDING,
+            "delete": True,
+        },
+    )
+    write_msg(
+        user,
+        format_filters_msg(
+            user,
+            "Сейчас мы поищем для вас людей по следующим условиям:\n",
+        ),
+        delete=True,
+        keyboard=kb.get_keyboard(),
+    )
+
+
+def finding(user):
+    "Режим поиска анкет"
+    del_all(user)
+    write_msg(user, "Идет поиск анкет...", delete=True)
+
+    user.App.user_vk, user.App.vkuserapi = vk_refresh(user, user.App.APP_ID)
+    if not user.App.user_vk:
+        user.state = State.NEED_ACCESS_TOKEN
+        user.save()
+        # continue
+        return
+
+    user_data = (
+        user.App.vkapi.users.get(
+            user_ids=user.vk_id,
+            fields="city, sex, birth_year, bdate",
+        )[0],
+    )
+
+    # birth_year = user_data["bdate"][5::]
+    # sex = (not (user_data["sex"] - 1)) + 1
+    profiles = user.App.vkuserapi.users.search(
+        city=user.filter_city_id,
+        sex=user.filter_gender,
+        age_from=user.filter_age_from,
+        age_to=user.filter_age_to,
+        count=10,
+        status=6,
+        fields="city, domain, bdate, sex",
+    )["items"]
+    print(profiles)
+    to_insert = []
+    for profile in profiles:
+        print(profile)
+        _ = {"vk_id": profile["id"]}
+        _["domain"] = profile["domain"]
+        _["birthday"] = profile["bdate"]
+        _["gender"] = profile["sex"]
+        _["city_id"] = profile["city"]["id"]
+        _["city"] = profile["city"]["title"]
+        to_insert.append(_)
+        print(_)
+    if not to_insert:
+        kb = VkKeyboard(inline=True)
+        kb.add_button(
+            "Изменить",
+            color=VkKeyboardColor.PRIMARY,
+            payload={
+                "command": "set_state",
+                "state": State.CHANGE_FILTERS,
+                "delete": True,
+            },
+        )
+
+        format_str, msg = extend_message(
+            "",
+            "Ничего не найдено, попробуйте изменить условия поиска",
+            type="bold",
+        )
+        write_msg(
+            user,
+            msg,
+            delete=True,
+            format=format_str,
+            keyboard=kb.get_keyboard(),
+        )
+        # break
+        return True
+    db_add_profiles(
+        user,
+        to_insert,
+        {"domain", "birthday", "gender", "city_id", "city"},
+    )
+    print(to_insert)
+    user.state = State.SHOW
+    del_all(user)
 
 
 def dlg_show(user):

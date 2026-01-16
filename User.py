@@ -3,7 +3,16 @@ from DB.user import db_get_user, db_update_user
 
 class User:
 
-    def __init__(self, uid=None, fetch=True):
+    def __init__(
+        self,
+        uid=None,
+        fetch=True,
+        App=None,
+        action=None,
+        payload=None,
+        event=None,
+        new_message=None,
+    ):
         if uid is None:
             if hasattr(self, "vk_id"):
                 uid = self.vk_id
@@ -18,6 +27,15 @@ class User:
         self._fieldlist = list(self._data)
         for key, value in self._data.items():
             self.__setattr__(key, value)
+
+        # user = User(uid, App, action, payload, event, new_message)
+        self.App = App
+        self.action = action
+        self.payload = payload
+        self.event = event
+        # hasattr()
+        self.request = getattr(event, "text", None)
+        self.new_message = True
 
     def get_changes(self):
         changes = []

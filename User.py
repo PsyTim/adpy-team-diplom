@@ -13,6 +13,9 @@ class User:
         event=None,
         new_message=None,
     ):
+        print(
+            f"{self=}, {uid=}, {fetch=}, {App=}, {action=}, {payload=}, {event=} {new_message=}"
+        )
         if uid is None:
             if hasattr(self, "vk_id"):
                 uid = self.vk_id
@@ -53,7 +56,6 @@ class User:
     def save(self, update=True):
         changes = self.get_changes()
         if changes:
-            print(f"{changes=}")
             db_update_user(self.vk_id, changes)
             if update:
                 for c in changes:

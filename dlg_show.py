@@ -73,10 +73,8 @@ def finding(user):
         status=6,
         fields="city, domain, bdate, sex",
     )["items"]
-    print(profiles)
     to_insert = []
     for profile in profiles:
-        print(profile)
         _ = {"vk_id": profile["id"]}
         _["domain"] = profile["domain"]
         _["birthday"] = profile["bdate"]
@@ -84,7 +82,7 @@ def finding(user):
         _["city_id"] = profile["city"]["id"]
         _["city"] = profile["city"]["title"]
         to_insert.append(_)
-        print(_)
+        # print(_)
     if not to_insert:
         kb = VkKeyboard(inline=True)
         kb.add_button(
@@ -116,12 +114,11 @@ def finding(user):
         to_insert,
         {"domain", "birthday", "gender", "city_id", "city"},
     )
-    print(to_insert)
     user.state = State.SHOW
     del_all(user)
 
 
-def dlg_show(user):
+def show(user):
     # Режим показа анкет
     # del_all(user)
     # user.save()
@@ -236,7 +233,6 @@ def dlg_show(user):
                     ee.error["error_msg"],
                 )
                 if ee.code == 30 and ee.error["error_msg"] == "This profile is private":
-                    print("delete")
                     db_profile_del(user, res["id"])
                     user.state = State.SHOW
                     user.save()

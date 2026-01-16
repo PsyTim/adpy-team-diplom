@@ -30,6 +30,10 @@ class State:  # этапы диалога
     CHANGE_CITY = 19
     SET_CITY = {CITY_NEED, INPUT_CITY, CHANGE_CITY}
 
+    SHOW_BL = 21
+    HELP = 22
+    RESTART = 23
+
     ACT_CLEAR_BL = 1
     ACT_NEXT = 2
     ACT_AGAIN = 3

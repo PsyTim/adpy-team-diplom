@@ -15,11 +15,14 @@ class App:
     AUTH_REDIRECT_URI = AUTH_REDIRECT_URI
     vk = vk_api.VkApi(token=TOKEN)
     vkapi = vk.get_api()
-    longpoll = VkLongPoll(
-        vk,
-        wait=1,
-    )
-
+    longpoll = None
     # Создаем доп. экземпляр для запросов от имени пользователя
     user_vk = None
     vkuserapi = None
+
+    @classmethod
+    def init(cls):
+        cls.longpoll = VkLongPoll(
+            cls.vk,
+            wait=1,
+        )

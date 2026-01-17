@@ -2,17 +2,15 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.exceptions import ApiError as VkApiError
 
 from messages import del_all, format_filters_msg, write_msg, declension, extend_message
+import DB.profiles
 from DB.profiles import (
     db_add_profiles,
     db_count_filter_profiles,
     db_profile_clean_viewed,
     db_count_filter_profiles_viewed,
     db_count_filter_fav,
-    db_count_filter_profiles_blacklisted,
     db_get_profile,
     db_profile_to_fav,
-    db_profile_set_viewed,
-    db_profile_clean_bl,
     db_profile_set_blacklisted,
     db_profile_del,
 )
@@ -38,7 +36,6 @@ def find(user):
             user,
             "Сейчас мы поищем для вас людей по следующим условиям:\n",
         ),
-        delete=True,
         keyboard=kb.get_keyboard(),
     )
 
@@ -46,7 +43,7 @@ def find(user):
 def finding(user):
     "Режим поиска анкет"
     del_all(user)
-    write_msg(user, "Идет поиск анкет...", delete=True)
+    write_msg(user, "Идет поиск анкет...")
 
     user.App.user_vk, user.App.vkuserapi = vk_refresh(user, user.App.APP_ID)
     if not user.App.user_vk:
@@ -103,7 +100,6 @@ def finding(user):
         write_msg(
             user,
             msg,
-            delete=True,
             format=format_str,
             keyboard=kb.get_keyboard(),
         )
@@ -129,7 +125,7 @@ def show(user):
         pass
     viewed_cnt = db_count_filter_profiles_viewed(user)["count"]
     fav_cnt = db_count_filter_fav(user)["count"]
-    cnt_blck = db_count_filter_profiles_blacklisted(user)["count"]
+    cnt_blck = DB.profiles.count_filter_blacklisted(user)
     if cnt and user.action == State.ACT_TO_FAV:
         res = db_get_profile(user)
         db_profile_to_fav(user, res["id"])
@@ -137,8 +133,8 @@ def show(user):
         fav_cnt += 1
         viewed_cnt += 1
 
-    if not cnt and cnt_blck and user.action == State.ACT_CLEAR_BL:
-        db_profile_clean_bl(user)
+    if not cnt and cnt_blck and user.action == State.ACT_CLEAN_BL:
+        DB.profiles.clean_bl(user)
         cnt = db_count_filter_profiles(user)["count"]
         cnt_blck = 0
         pass
@@ -189,9 +185,9 @@ def show(user):
                 color=VkKeyboardColor.POSITIVE,
                 payload={
                     "command": "set_state",
-                    "state": State.SHOW,
+                    "state": State.CLEAN_BL,
                     "delete": True,
-                    "action": State.ACT_CLEAR_BL,
+                    # "action": State.ACT_CLEAN_BL,
                 },
             )
         send_kb = kb.get_keyboard()
@@ -202,7 +198,6 @@ def show(user):
     write_msg(
         user,
         f"{msg}\n\nПо этим условияям найдено непросмотренных профилей: {cnt}\nПросмотрено {viewed_cnt}, в избранном {fav_cnt}, в черном списке {cnt_blck}",
-        delete=True,
         keyboard=send_kb,
     )
     if cnt:
@@ -292,7 +287,6 @@ def show(user):
             write_msg(
                 user,
                 f"\n\n[https://vk.com/{res['domain']}|{profile['first_name']} {profile['last_name']}]\n{res['city']}, {int(res['age'])} {declension(int(res['age']), 'год', 'года', 'лет')}",
-                delete=True,
                 keyboard=send_kb,
                 attach=",".join(phsl),
             )

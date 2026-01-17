@@ -13,9 +13,6 @@ class User:
         event=None,
         new_message=None,
     ):
-        print(
-            f"{self=}, {uid=}, {fetch=}, {App=}, {action=}, {payload=}, {event=} {new_message=}"
-        )
         if uid is None:
             if hasattr(self, "vk_id"):
                 uid = self.vk_id

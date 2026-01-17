@@ -72,7 +72,7 @@ def vk_refresh(user, APP_ID):
     r_j = response.json()
     from pprint import pprint
 
-    pprint(r_j)
+    # vpprint(r_j)
     # print(r_j.get("error"))
     if r_j.get("error") in ("invalid_grant", "invalid_request"):
         return None, None

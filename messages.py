@@ -35,24 +35,25 @@ def format_filters_msg(user, title="Условия подбора:"):
         genders[int(user.filter_gender)] if not user.filter_gender is None else no_value
     )
     city = user.filter_city if not user.filter_city is None else no_value
+    title = title if title else ""
     return title + f"{min_age}- {max_age} {gender} {city}"
 
 
-def extend_message(message, add, format_=[], type=None):
+def extend_message(message, add, format_=[], type="bold"):
     format = format_.copy()
     res = message + add
     if type:
         format.append(
             {
                 "type": type,
-                "offset": len(message),
+                "offset": max(0, len(message) - 1),
                 "length": len(add),
             }
         )
     return format, res
 
 
-def write_msg(user, message, keyboard=None, format=None, delete=False, attach=None):
+def write_msg(user, message, keyboard=None, format=None, delete=True, attach=None):
     if isinstance(user, User):
         user_id = user.vk_id
     else:

@@ -4,29 +4,27 @@ from vk_api.exceptions import ApiError as VkApiError
 from messages import del_all, format_filters_msg, write_msg, declension, extend_message
 import DB.profiles
 from DB.profiles import (
-    db_count_filter_profiles,
-    db_profile_clean_viewed,
-    db_count_filter_profiles_viewed,
     db_count_filter_fav,
-    db_count_filter_profiles_blacklisted,
-    db_get_profile,
-    db_profile_to_fav,
-    db_profile_set_viewed,
-    db_profile_clean_bl,
-    db_profile_set_blacklisted,
     db_profile_del,
 )
 from State import State
 from vk_auth import vk_refresh
+from dlg_keyboard import Kb
 
 
 def show(user):
-    del_all(user)
-    user.save()
-    fav_cnt = db_count_filter_fav(user)["count"]
-    fav_cnt_total = DB.profiles.count_fav_total(user)["count"]
-    if fav_cnt:
+    "Просмотр очередной анкеты в избранном и обработка действий с ней"
+    # Количество анкет в избраном по текушим фильтрам
+    cnt_filtered = db_count_filter_fav(user)["count"]
+    # Обшее количество анкет в избраном
+    cnt_total = DB.profiles.count_fav_total(user)["count"]
+    cnt = cnt_total
+    if cnt:
+        # Если
         res = DB.profiles.get_fav(user)
+        if user.action == State.ACT_NEXT:
+            DB.profiles.set_viewed(user, res["id"])
+            res = DB.profiles.get_fav(user)
         write_msg(user, str(res))
         user.App.user_vk, user.App.vkuserapi = vk_refresh(user, user.App.APP_ID)
         if not user.App.user_vk:
@@ -123,9 +121,17 @@ def show(user):
                 user,
                 msg,
                 format=msg_format,
-                delete=True,
                 keyboard=send_kb,
                 attach=",".join(phsl),
             )
-            user.save()
+    else:
+        Kb.add("Вернуться к просмотру кандидатов", Kb.pri, State.SHOW, inline=True)
+
+        msg = "В избранном пусто"
+        write_msg(
+            user,
+            msg,
+            keyboard=Kb.get(),
+        )
+
     return True

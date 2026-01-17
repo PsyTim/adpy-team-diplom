@@ -33,10 +33,10 @@ class Kb:
             cls.new(inline)
 
     @classmethod
-    def new(cls, inline=False):
+    def new(cls, inline=True):
         cls.self = Kb(inline)
 
-    def __init__(self, inline=False):
+    def __init__(self, inline=True):
         # print("init")
         self.self = self
         self.keyboard = VkKeyboard(False, inline)
@@ -61,6 +61,7 @@ class Kb:
         label,
         color=VkKeyboardColor.SECONDARY,
         state=None,
+        action=None,
         delete=True,
         command=None,
         inline=None,
@@ -70,6 +71,8 @@ class Kb:
         if state:
             payload["command"] = "set_state"
             payload["state"] = state
+        if action:
+            payload["action"] = action
         if delete:
             payload["delete"] = True
         if label[0] == "\n":
@@ -84,9 +87,6 @@ class Kb:
 
 
 def main_menu(user, menu_message=False):
-    if menu_message:
-        user.kb_id = write_msg(user, ".")
-        return
     # Создание клавиатуры
 
     # send_kb = keyboard.get_empty_keyboard()
@@ -98,17 +98,31 @@ def main_menu(user, menu_message=False):
         # and user.filter_age_from
         # and user.filter_age_to
     ):
-        if user.state in State.SET_FILTERS:
-            Kb.add("Смотреть кандидатов", Kb.pri, State.SHOW)
-        else:
+        if user.state in State.SET_SHOW:
             Kb.add("Условия подбора", Kb.sec, State.CHANGE_FILTERS)
-        Kb.add("❤ Любимые анкеты", Kb.pos, State.SHOW_FAV)
+        else:
+            Kb.add("Смотреть кандидатов", Kb.pri, State.SHOW)
+
+        if user.state in State.SET_SHOW_FAV:
+            Kb.add("Условия подбора", Kb.sec, State.CHANGE_FILTERS)
+        else:
+            Kb.add("❤ Любимые анкеты", Kb.pos, State.SHOW_FAV)
         Kb.nl()
-        Kb.add("⛔ Черный список", Kb.neg, State.SHOW_BL)
+        if user.state in State.SET_BL:
+            Kb.add("Условия подбора", Kb.sec, State.CHANGE_FILTERS)
+        else:
+            Kb.add("⛔ Черный список", Kb.neg, State.SHOW_BL)
         Kb.add("Помощь", Kb.sec, State.HELP),
         Kb.add("Перезапуск", Kb.sec, State.RESTART),
 
     send_kb = Kb.get()
     # print(send_kb)
-    edit(user, user.kb_id, "..", keyboard=send_kb)
-    del_msg(user.kb_id, user.App.vk)
+
+    # if menu_message:
+    if not getattr(user, "kb_id", False):
+        user.kb_id = write_msg(user, ".", keyboard=send_kb, delete=False)
+        # return
+    else:
+        edit(user, user.kb_id, "..", keyboard=send_kb)
+        del_msg(user.kb_id, user.App.vk)
+        user.kb_id = None

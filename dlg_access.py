@@ -1,22 +1,9 @@
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.exceptions import ApiError as VkApiError
 
-from messages import del_all, format_filters_msg, write_msg, declension
-from DB.profiles import (
-    db_count_filter_profiles,
-    db_profile_clean_viewed,
-    db_count_filter_profiles_viewed,
-    db_count_filter_fav,
-    db_count_filter_profiles_blacklisted,
-    db_get_profile,
-    db_profile_to_fav,
-    db_profile_set_viewed,
-    db_profile_clean_bl,
-    db_profile_set_blacklisted,
-    db_profile_del,
-)
+from messages import del_all, write_msg
 from State import State
-from vk_auth import vk_auth_link, vk_refresh
+from vk_auth import vk_auth_link
 
 
 def get(user):
@@ -38,8 +25,7 @@ def get(user):
     write_msg(
         user,
         "Для поиска анкет в контакте нажмите на кнопку чтобы разрешить доступ",
-        keyboard=kb.get_keyboard(),
-        delete=True,
+        keyboard=kb.get_keyboard()
     )
     user.state = State.WAIT_ACCESS_TOKEN
     user.save()

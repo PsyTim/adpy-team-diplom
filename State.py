@@ -33,14 +33,21 @@ class State:  # этапы диалога
     SHOW_BL = 21
     HELP = 22
     RESTART = 23
+    CLEAN_BL = 25
 
-    ACT_CLEAR_BL = 1
+    ACT_CLEAN_BL = 1
     ACT_NEXT = 2
     ACT_AGAIN = 3
     ACT_TO_BL = 4
     ACT_TO_FAV = 5
     ACT_NEXT = 6
     ACT_ADD_BL = 7
+    ACT_CLEAN_BL_ALL = 8
+    ACT_HLP = 9
+
+    SET_BL = {SHOW_BL, CLEAN_BL}
+    SET_SHOW = {SHOW}
+    SET_SHOW_FAV = {SHOW_FAV}
 
     GETTING_ACCESS_TOKEN = {NEED_ACCESS_TOKEN, WAIT_ACCESS_TOKEN}
     SET_FILTERS = {

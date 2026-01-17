@@ -1,16 +1,14 @@
-import json
+import traceback, sys, json, re
 from time import sleep
-
+from pprint import pprint
 from vk_api.longpoll import VkEventType
-
-# from requests.exceptions import ReadTimeout as requests_exceptions_ReadTimeout
 import requests.exceptions
 
 from App import App
 from State import State
 from User import User
-import dlg_access, dlg_show, dlg_filters, dlg_fav, dlg_keyboard
 from messages import del_all
+import dlg_access, dlg_show, dlg_filters, dlg_fav, dlg_keyboard, dlg_bl
 
 
 def states_processing(user):
@@ -138,7 +136,14 @@ def states_processing(user):
                 break
 
         elif user.state == State.SHOW_BL:
-            user.state = State.SHOW
+            if dlg_bl.show(user):
+                break
+
+        elif user.state == State.CLEAN_BL:
+            if dlg_bl.clean(user):
+                break
+        else:
+            user.state = None
 
 
 def process_event(event):
@@ -165,11 +170,8 @@ def process_event(event):
         user.state = json.loads(event.extra_values.get("payload", "{}")).get("state")
         if json.loads(event.extra_values.get("payload", "{}")).get("delete", False):
             del_all(user)
-    from pprint import pprint
 
-    print("user.App = ", end="")
-    pprint(user.App)
-    dlg_keyboard.main_menu(user, menu_message=True)
+    dlg_keyboard.main_menu(user)
 
     states_processing(user)
 
@@ -177,26 +179,141 @@ def process_event(event):
     user.save()
 
 
+def error_list(tb):
+    result = []
+    for i, frame in enumerate(traceback.extract_tb(tb)):
+        fname = frame.filename
+        line = frame.line
+        name = frame.name
+        result.append(
+            {
+                "filename": frame.filename,
+                "line": frame.line,
+                "lineno": frame.lineno,
+                "name": frame.name,
+            }
+        )
+    return result
+
+
+def skip_error(
+    e,
+    el,
+    frame_range=None,
+    f_re=None,
+    line_re=None,
+    name_re=None,
+    cls=None,
+    msg_re=None,
+):
+    # if msg_re:
+    #     print(f"{re.search(msg_re, str(e))=} {msg_re=} {str(e)=}")
+    if cls and cls != type(e) or msg_re and not re.search(msg_re, str(e)):
+        #     print("  - fail")
+        # else:
+        #     print("  - success")
+        return None
+    if frame_range is None:
+        rng = range(0, len(el))
+    elif type(frame_range) == range:
+        rng = frame_range
+    elif type(frame_range) == int:
+        rng = range(frame_range, frame_range + 1)
+    else:
+        print("error frame_range type", type(frame_range))
+        return None
+    for i in rng:
+        # print(i)
+        fname = el[i]["filename"]
+        line = el[i]["line"]
+        name = el[i]["name"]
+        # passed = False
+        # if msg_re:
+        #     print(f"    {i}. {re.search(f_re, fname)=} {f_re=} {fname=}")
+        # if not f_re or re.search(f_re, fname):
+        #     print("      - success")
+        # else:
+        #     print("      - fail")
+        if (
+            (not f_re or re.search(f_re, fname))
+            and (not line_re or re.search(line_re, line))
+            and (not name_re or re.search(name_re, name))
+        ):
+            # passed = True
+            return i
+        if (cls or msg_re) and not (name_re or line_re or f_re):
+            return True
+
+
+def unknown_error(e):
+    el = error_list(sys.exc_info()[2])
+    l_pass = []
+    passed = skip_error(
+        e,
+        el,
+        range(-1, 2),
+        r"main.py",
+        r"events = App.longpoll.check()",
+        r"main",
+        # AttributeError,
+        # Exception,
+        msg_re=r"Connection to im\.vk\.com timed out",
+    )
+    if not passed is None:
+        l_pass.append(passed)
+    passed = skip_error(
+        e,
+        el,
+        range(-1, 2),
+        r"main.py",
+        r"events = App.longpoll.check()",
+        r"main",
+        msg_re=r"'Event' object has no",
+        cls=AttributeError,
+        # cls=ValueError,
+    )
+    if not passed is None:
+        l_pass.append(passed)
+    if l_pass:
+        print(
+            "skip",
+            l_pass,
+            el[l_pass[0]]["lineno"],
+            el[l_pass[0]]["name"],
+            el[l_pass[0]]["line"],
+            e,
+            type(e),
+        )
+    else:
+        print("error", e, type(e))
+        for fr in el:
+            print(
+                f"File \"{fr['filename']}\", line {fr['lineno']}, in {fr['name']} | {fr['line']}"
+            )
+
+
 def main():
+    try:
+        App.init()
+    except Exception as e:
+        unknown_error(e)
+        exit()
     while True:
         try:
-            # for event in longpoll.listen():
-            try:
-                events = App.longpoll.check()
-            except Exception as e:
-                print(e)
-                continue
+            events = App.longpoll.check()
             if not len(events):
                 sleep(1)
             for event in events:
                 if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                     process_event(event)
-
         except requests.exceptions.ReadTimeout:
             print("\n Переподключение к серверам ВК \n")
             sleep(3)
-        # except Exception as e:
-        #     print(e)
+
+        except Exception as e:
+            unknown_error(e)
+            # raise e
+            sleep(3)
 
 
 if __name__ == "__main__":

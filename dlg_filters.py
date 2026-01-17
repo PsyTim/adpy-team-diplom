@@ -2,19 +2,6 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.exceptions import ApiError as VkApiError
 
 from messages import del_all, format_filters_msg, write_msg, declension, extend_message
-from DB.profiles import (
-    db_count_filter_profiles,
-    db_profile_clean_viewed,
-    db_count_filter_profiles_viewed,
-    db_count_filter_fav,
-    db_count_filter_profiles_blacklisted,
-    db_get_profile,
-    db_profile_to_fav,
-    db_profile_set_viewed,
-    db_profile_clean_bl,
-    db_profile_set_blacklisted,
-    db_profile_del,
-)
 from State import State
 from vk_auth import vk_refresh
 
@@ -95,7 +82,6 @@ def change(user):
         user,
         msg,
         keyboard=kb.get_keyboard(),
-        delete=True,
     )
     print("После:", user.to_del)
 
@@ -127,13 +113,11 @@ def min_age_need(user):
         user,
         msg,
         format=msg_format,
-        delete=True,
         keyboard=send_kb,
     )
     write_msg(
         user,
         f"Введите минимальный возраст (16-{min(99, user.filter_age_to if user.filter_age_to else 100)}):",
-        delete=True,
     )
     user.state = State.MIN_AGE_INPUT
 
@@ -158,7 +142,7 @@ def min_age_input(user):
         return
 
     msg_format, msg = extend_message("", error_message, type="bold")
-    write_msg(user, msg, format=msg_format, delete=True)
+    write_msg(user, msg, format=msg_format)
     user.state = State.MIN_AGE_NEED
 
 
@@ -202,13 +186,11 @@ def max_age_need(user):
         user,
         msg,
         format=msg_format,
-        delete=True,
         keyboard=send_kb,
     )
     write_msg(
         user,
         f"{'В' if user.filter_age_to else 'Теперь в' }ведите максимальный возраст ({max(user.filter_age_from ,16)} - 99):",
-        delete=True,
     )
     user.state = State.MAX_AGE_INPUT
 
@@ -233,7 +215,7 @@ def max_age_input(user):
         return
 
     msg_format, msg = extend_message("", error_message, type="bold")
-    write_msg(user, msg, format=msg_format, delete=True)
+    write_msg(user, msg, format=msg_format)
 
     user.state = State.MAX_AGE_NEED
 
@@ -294,7 +276,6 @@ def gender_need(user):
         user,
         msg,
         format=msg_format,
-        delete=True,
         keyboard=send_kb,
     )
     user.state = State.CHANGE_GENDER
@@ -315,7 +296,7 @@ def change_gender(user):
         user.filter_gender = set_gender
         return
     msg_format, msg = extend_message("", error_message, type="bold")
-    write_msg(user, msg, format=msg_format, delete=True)
+    write_msg(user, msg, format=msg_format)
 
 
 def city_need(user):
@@ -344,13 +325,11 @@ def city_need(user):
         user,
         msg,
         format=msg_format,
-        delete=True,
         keyboard=send_kb,
     )
     write_msg(
         user,
         f"Введите название города или его часть:",
-        delete=True,
     )
     user.state = State.INPUT_CITY
 
@@ -371,7 +350,7 @@ def input_city(user):
     if len(user.request) > 15:
         user.request = user.request[0:15]
         # write_msg(
-        #     user, "много городов, вот некоторые", delete=True
+        #     user, "много городов, вот некоторые"
         # )
     user.App.user_vk, user.App.vkuserapi = vk_refresh(user, user.App.APP_ID)
     if not user.App.user_vk:
@@ -419,7 +398,6 @@ def input_city(user):
             user,
             msg,
             format=msg_format,
-            delete=True,
         )
         user.state = State.CITY_NEED
         return
@@ -445,7 +423,6 @@ def input_city(user):
         user,
         msg,
         format=msg_format,
-        delete=True,
         keyboard=send_kb,
     )
     user.state = State.INPUT_CITY
